@@ -15,6 +15,14 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     set(IS_MSVC true)
 endif()
 
+macro(check_precompiled_header target relative_path)
+    set(PRECOMPILED_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/${relative_path}")
+    if (EXISTS ${PRECOMPILED_HEADER})
+        message(STATUS "${target}: Found precompiled header at '${relative_path}'")
+        target_precompile_headers(${target} PUBLIC ${PRECOMPILED_HEADER})
+    endif()
+endmacro()
+
 macro(setup target)
     # COMPILE
     # LINK
@@ -26,33 +34,46 @@ macro(setup target)
     # RELDEB_LINK
 
     if(DEFINED IS_CLANGCL OR DEFINED IS_MSVC)
-        string(REGEX REPLACE "/Ob1" "/Ob3" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-        string(REGEX REPLACE "/Ob1" "/Ob3" CMAKE_C_FLAGS_RELWITHDEBINFO   "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
-        string(REGEX REPLACE "/Ob2" "/Ob3" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-        string(REGEX REPLACE "/Ob2" "/Ob3" CMAKE_C_FLAGS_RELWITHDEBINFO   "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+        message(STATUS "${target}: Initializing MSVC compiler/linker command-line")
 
-        set(COMPILE /MP /cgthreads8 /Zc:preprocessor /wd5105)
+        string(REGEX REPLACE "/Ob[12]"            "/Ob3" CMAKE_CXX_FLAGS_RELEASE        "${CMAKE_CXX_FLAGS_RELEASE}")
+        string(REGEX REPLACE "/Ob[12]"            "/Ob3" CMAKE_C_FLAGS_RELEASE          "${CMAKE_C_FLAGS_RELEASE}")
+        string(REGEX REPLACE "/Ob[12]"            "/Ob3" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+        string(REGEX REPLACE "/Ob[12]"            "/Ob3" CMAKE_C_FLAGS_RELWITHDEBINFO   "${CMAKE_C_FLAGS_RELWITHDEBINFO}")
+        string(REGEX REPLACE "[/|-]RTC(su|[1su])" ""     CMAKE_CXX_FLAGS_DEBUG          "${CMAKE_CXX_FLAGS_DEBUG}")
+        string(REGEX REPLACE "[/|-]RTC(su|[1su])" ""     CMAKE_C_FLAGS_DEBUG            "${CMAKE_C_FLAGS_DEBUG}")
+
+        set(COMPILE
+            /MP
+            /cgthreads8
+            /Zc:preprocessor
+            /FC
+            /GS-
+            /GR-
+            /EHa-s-c-
+        )
         set(LINK /INCREMENTAL:NO /CGTHREADS:8)
 
-        set(DEBUG_COMPILE /JMC /Od /MDd)
+        set(DEBUG_COMPILE /JMC /Od)
 
-        set(RELEASE_COMPILE /O2 /GS- /guard:cf /D NDEBUG /JMC- /GL /Ob3 /MD /fp:fast)
+        set(RELEASE_COMPILE /O2 /guard:cf- /D NDEBUG /JMC- /GL /Ob3 /fp:fast)
         set(RELEASE_LINK /OPT:REF /OPT:ICF=10000 /LTCG)
 
         set(RELDEB_COMPILE ${RELEASE_COMPILE})
         set(RELDEB_LINK ${RELEASE_LINK})
     else()
+        message(STATUS "${target}: Initializing GCC compiler/linker command-line")
+
         set(COMPILE
-            -Wno-deprecated-comma-subscript
-            -Wno-macro-redefined
-            -Wno-address-of-temporary
+            -fno-exceptions
+            -fno-rtti
+            -fdiagnostics-absolute-paths
             -fmacro-backtrace-limit=0
-            -fexceptions
             -fdiagnostics-color
         )
-        set(LINK -Xlinker /subsystem:console)
-        set(DEBUG_COMPILE -O0 -g)
-        set(RELEASE_COMPILE -Ofast -flto -march=native -DNDEBUG)
+        set(LINK LINKER:/subsystem:console)
+        set(DEBUG_COMPILE -Og -g -DCONFIG_RELEASE=0 -DCONFIG_DEBUG=1)
+        set(RELEASE_COMPILE -Ofast -flto -march=native -DCONFIG_RELEASE=1 -DCONFIG_DEBUG=0)
         set(RELDEB_COMPILE ${RELEASE_COMPILE} -g)
     endif()
 
@@ -70,9 +91,9 @@ macro(setup target)
 
     set_target_properties(
         ${target} PROPERTIES
-        C_STANDARD 18
+        C_STANDARD 23
         C_EXTENSIONS ON
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_EXTENSIONS ON
     )
 
@@ -82,22 +103,33 @@ macro(setup target)
         $<INSTALL_INTERFACE:include/>
     )
     target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/)
+
+    check_precompiled_header(${target} ${target}/${target}.hpp)
+    check_precompiled_header(${target} ${target}.hpp)
+
+    check_precompiled_header(${target} ${target}/${target}.h)
+    check_precompiled_header(${target} ${target}.h)
 endmacro()
 
 macro(make_static_library target)
     find_sources()
+    message(STATUS "${target}: Creating a static library target")
     add_library(${target} STATIC ${SOURCES})
     setup(${target})
 endmacro()
 
+# TODO@Daniel:
+#   Renaming to `make_dynamic_library` might be better
 macro(make_dynamic_library target)
     find_sources()
+    message(STATUS "${target}: Creating dynamic library target")
     add_library(${target} SHARED ${SOURCES})
     setup(${target})
 endmacro()
 
 macro(make_executable target)
     find_sources()
+    message(STATUS "${target}: Creating an executable target")
     add_executable(${target} ${SOURCES})
     setup(${target})
 endmacro()
