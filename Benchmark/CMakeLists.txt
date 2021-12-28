@@ -3,8 +3,6 @@ cmake_policy(SET CMP0091 NEW)
 
 project(Benchmark)
 
-include(settings)
-
 make_executable(Benchmark)
 
 find_package(benchmark CONFIG REQUIRED)

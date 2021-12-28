@@ -3,8 +3,6 @@ cmake_policy(SET CMP0091 NEW)
 
 project(Test)
 
-include(settings)
-
 make_executable(Test)
 
 find_package(Catch2 CONFIG REQUIRED)

@@ -3,6 +3,8 @@ cmake_policy(SET CMP0091 NEW)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+include(settings)
+
 project(Everything)
 
 add_subdirectory(ExampleLib)
